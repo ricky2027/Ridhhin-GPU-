@@ -49,7 +49,8 @@ if [[ ${#existing[@]} -eq 0 ]]; then
     DL() { return 1; }
   fi
 
-  # Pick a TIFF -> PNG converter.
+  # Pick a TIFF -> PNG converter. ImageMagick / sips if present, otherwise
+  # fall back to Python + Pillow (available on Colab and most Python installs).
   convert_to_png() {  # $1 = src tiff, $2 = dst png
     if command -v magick >/dev/null 2>&1; then
       magick "$1" "$2"
@@ -57,6 +58,12 @@ if [[ ${#existing[@]} -eq 0 ]]; then
       convert "$1" "$2"
     elif command -v sips >/dev/null 2>&1; then
       sips -s format png "$1" --out "$2" >/dev/null
+    elif command -v python3 >/dev/null 2>&1; then
+      python3 - "$1" "$2" <<'PY'
+import sys
+from PIL import Image
+Image.open(sys.argv[1]).convert("RGB").save(sys.argv[2])
+PY
     else
       return 1
     fi
@@ -94,6 +101,18 @@ if [[ ${#existing[@]} -eq 0 ]]; then
       magick -size 512x512 gradient:black-white "$INPUT_DIR/gradient.png"
     elif command -v convert >/dev/null 2>&1; then
       convert -size 512x512 gradient:black-white "$INPUT_DIR/gradient.png"
+    elif command -v python3 >/dev/null 2>&1; then
+      python3 - "$INPUT_DIR/gradient.png" <<'PY'
+import sys
+from PIL import Image
+img = Image.new("RGB", (512, 512))
+px = img.load()
+for y in range(512):
+    for x in range(512):
+        v = (x + y) // 4 % 256
+        px[x, y] = (v, (x * 255) // 511, (y * 255) // 511)
+img.save(sys.argv[1])
+PY
     else
       echo "    !! cannot generate a fallback image either." >&2
       echo "    Please place a .png/.jpg/.bmp into $INPUT_DIR and re-run." >&2
